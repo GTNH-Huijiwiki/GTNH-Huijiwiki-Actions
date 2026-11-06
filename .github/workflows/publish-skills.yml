@@ -1,0 +1,46 @@
+name: 发布编辑技能到维基
+
+on:
+  repository_dispatch:
+    types: [publish-skill]   # 由 GTNH-Huijiwiki-Editing 推送后触发
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 要发布的 GTNH-Huijiwiki-Editing 分支或提交
+        default: main
+
+# 连续推送时按顺序发布，不并行写同一批页面
+concurrency:
+  group: publish-skills
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: Wiki
+
+    steps:
+      - name: 检出本仓库
+        uses: actions/checkout@v4
+
+      - name: 检出 GTNH-Huijiwiki-Editing
+        uses: actions/checkout@v4
+        with:
+          repository: GTNH-Huijiwiki/GTNH-Huijiwiki-Editing
+          ref: ${{ github.event.client_payload.sha || inputs.ref || 'main' }}
+          path: editing
+
+      - name: 安装 Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: 安装 pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: 发布技能页面
+        env:
+          AUTHKEY: ${{ secrets.WIKI_AUTHKEY }}
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+          BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
+        run: python scripts/publish_skills.py editing
