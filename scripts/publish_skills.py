@@ -29,6 +29,8 @@ H1 = re.compile(r"\A\s*# ([^\n]+)\n")
 MD_LINK = re.compile(r"(?<!!)\[([^\]\n]+)\]\(([^)\s]+)\)")
 INLINE_CODE = re.compile(r"<code>(.*?)</code>", re.S)
 ILLEGAL_TITLE = re.compile(r"[\[\]{}|<>#]")
+CATEGORY_OR_FILE = re.compile(r"^(分类|Category|文件|File|Image|图像)\s*:", re.I)
+CODE_BLOCK = re.compile(r'<syntaxhighlight lang="[^"]*">(.*?)</syntaxhighlight>', re.S)
 
 
 def split_frontmatter(text):
@@ -86,6 +88,9 @@ class Skill:
         if target.startswith(WIKI_URL):
             path, _, anchor = target[len(WIKI_URL):].partition("#")
             title = urllib.parse.unquote(path).replace("_", " ")
+            # 分类和文件页面要加前导冒号，否则 [[分类:…]] 会把本页归入该分类，[[文件:…]] 会嵌入图片。
+            if CATEGORY_OR_FILE.match(title):
+                title = ":" + title
             return title + ("#" + urllib.parse.unquote(anchor) if anchor else "")
         if re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I) or target.startswith("#"):
             return target
@@ -104,8 +109,9 @@ class Skill:
             input=markdown, capture_output=True, text=True, encoding="utf-8", check=True,
         )
         # pandoc 不转义行内代码里的 {{…}}、[[…]]，包一层 nowiki，避免在维基上被展开。
-        return INLINE_CODE.sub(lambda m: "<code><nowiki>" + m.group(1) + "</nowiki></code>",
-                               result.stdout).strip()
+        text = INLINE_CODE.sub(lambda m: "<code><nowiki>" + m.group(1) + "</nowiki></code>", result.stdout)
+        # 站点的语法高亮服务不可用（任何语言都会被归入「存在语法高亮错误的页面」），代码块改用 pre。
+        return CODE_BLOCK.sub(lambda m: "<pre>" + m.group(1) + "</pre>", text).strip()
 
     def navigation(self, current):
         items = []
